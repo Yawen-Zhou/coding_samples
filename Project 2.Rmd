@@ -1,0 +1,275 @@
+---
+title: "Project 2"
+author: "Yawen Zhou"
+date: "2023-09-27"
+output: html_document
+---
+
+
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+Part 1: Fun with functions
+```{r}
+## Part 1A: Exponential Transformation
+
+Exp <- function(x, k) {
+  total <- 1
+  if(k >= 1){
+    for (i in 1:k) {
+    total <- total + x^i/factorial(i)
+    }
+    return(total)
+  }
+  else{
+    return("The value of k should always be larger than or equal to 1")
+  }
+  
+}
+
+print(Exp(1, 2))
+print(Exp(1, 100))
+print(Exp(2, 20))
+print(Exp(1, -1))
+
+```
+
+```{r}
+## Part 1B: Sample mean and sample standard deviation
+
+sample_mean <- function(x) {
+  if(length(x) == 0){
+    return("The vector is empty")
+  }
+  else{
+    mean_x <- sum(x)/length(x)
+    return(mean_x)
+    }
+}
+
+sample_sd <- function(x) {
+  if(length(x) == 0){
+    return("The vector is empty")
+  }
+  else{
+    difference <- x-sample_mean(x)
+    sum_difference <- sum(difference^2)
+    sd_x <- sqrt(sum_difference/(length(x)-1))
+    return(sd_x)
+  }
+}
+
+sample1 <- c(2,4,5,7,9,10,273,29,3,28,387)
+print(sample_mean(sample1))
+identical(sample_mean(sample1), mean(sample1)) # To check if my function got the same answer
+print(sample_sd(sample1))
+identical(sample_sd(sample1), sd(sample1)) #To check if my function got the same answer
+
+```
+
+```{r}
+## Part 1C: Confidence intervals
+
+calculate_CI <- function(x, conf = 0.95) {
+  alpha <- 1-conf
+  degrees_freedom <- length(x)-1
+  t_score <- qt(p = alpha / 2, df = degrees_freedom, lower.tail = FALSE)
+  upper <- sample_mean(x) + t_score*sample_sd(x)/sqrt(length(x))
+  lower <- sample_mean(x) - t_score*sample_sd(x)/sqrt(length(x))
+  bounds <- c(lower_bound = lower, upper_bound = upper)
+  return (bounds)
+}
+
+x <- c(1,2,3,4,5,6,7,8,9,10)
+
+calculate_CI(x, conf = 0.95)
+dat <- data.frame(x = x)
+fit <- lm(x ~ 1, dat)
+confint(fit, level = 0.95) #To check if my function got the same answer
+
+calculate_CI(x, conf = 0.90)
+dat <- data.frame(x = x)
+fit <- lm(x ~ 1, dat)
+confint(fit, level = 0.90) #To check if my function got the same answer
+
+```
+
+Part 2: Wrangling data
+```{r}
+Sys.setenv(GITHUB_PAT = "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")  #Address the rate limit issue by using personal access token
+
+library(here)
+if (!file.exists(here("data", "tuesdata_rainfall.RDS"))) {
+    tuesdata <- tidytuesdayR::tt_load("2020-01-07")
+    rainfall <- tuesdata$rainfall
+    temperature <- tuesdata$temperature
+
+    # save the files to RDS objects
+    saveRDS(tuesdata$rainfall, file = here("data", "tuesdata_rainfall.RDS"))
+    saveRDS(tuesdata$temperature, file = here("data", "tuesdata_temperature.RDS"))
+}
+
+rainfall <- readRDS(here("data", "tuesdata_rainfall.RDS"))
+temperature <- readRDS(here("data", "tuesdata_temperature.RDS"))
+
+library(tidyverse)
+library(conflicted)
+glimpse(rainfall)
+glimpse(temperature)
+```
+
+```{r}
+## Drop any rows with NAs
+df <- rainfall %>%
+  drop_na()
+
+## Create a new column "date" and convert the city name to all upper case
+df <- df %>%
+  mutate(
+    date = ymd(paste(year, month, day, sep = "-")),
+    city_name = str_to_upper(city_name)
+  )
+
+## Keep the column "year"
+df <- df %>%
+  select(-month, -day)
+
+## Join this dataset with the temperature dataset 
+df <- inner_join(df, temperature, by = c("city_name", "date"), relationship = "many-to-many")
+
+```
+
+Part 3: Data visualization
+```{r, fig.width=10, fig.height=8}
+## Part 3A: Plotting temperature data over time
+library(paletteer)
+
+## Filter years 2014 and onwards
+df_2014onwards <- df %>%
+  dplyr::filter(year >= 2014)
+
+## Make a line plot
+df_2014onwards %>%
+  ggplot(aes(
+    x = date,
+    y = temperature,
+    color = temp_type
+  )) +
+  geom_line(alpha = 2/3) +
+  facet_wrap(~ city_name, scales = "free_y", ncol = 1) +
+  labs(
+    title = "Maximum and Minimum Temperature Over Time",
+    subtitle = "Temperature fluctuates over time for various cities",
+    x = "Date",
+    y = "Temperature",
+    color = "Temperature Type",
+    caption = "Yawen Zhou"
+  ) +
+  theme(
+    plot.title = element_text(size = 19, hjust = 0.5),
+    plot.subtitle = element_text(size = 15, hjust = 0.5),
+    plot.caption = element_text(size = 12),
+    axis.text.x = element_text(size = 11),
+    axis.text.y = element_text(size = 11),
+    strip.text = element_text(size = 12, face = "bold"),
+    axis.title.x = element_text(size = 15),
+    axis.title.y = element_text(size = 15),
+    legend.title = element_text(size = 12),
+    legend.key.size = unit(1, "cm"),
+    panel.background = element_rect(fill = "white"),
+    strip.background = element_rect(fill = "#F6FCEC", color = "white")
+  ) +
+   scale_colour_manual(values = paletteer_d("unikn::pal_unikn_pref", 2))
+
+## Part 3B: Plotting rainfall over time
+## Design a function that can be re-used to visualize data (line plot): Write a function to use ggplot to generate histogram according to the input city_name and year.
+## 1. Filter the data with specified city name and year since it is a way to get data of the input city and year 2. Use if/else to check if there is no combination of city name and year, if yes, stop. It is a way to detect empty data and show error. 3. Use ggplot to draw a histogram (geom_histogram()) of rainfall in log scale, use theme() to make the plot better looking.
+
+visualize_rainfall <- function(a, b) {  #Input a is city_name, b is year
+  df_filtered <- df %>%   
+    dplyr::filter(city_name == a, year == b)  #Filter the dataset according to the input city_name and year
+  if (nrow(df_filtered) == 0) {
+    stop("No measurement available.") # If the combination of city_name and year has no measurement, stop
+  }
+  else {
+    rainfall_histogram <- df_filtered %>%
+      ggplot(aes(log(rainfall))) +
+      geom_histogram(fill = "#EEB7DA", color = "black") +  #Generate histogram describing the distribution of log(rainfall) from df_filter
+      labs(
+        title = paste("Histogram of Rainfall, ", str_to_title(a), ", ", b),
+        subtitle = paste("Trends of rainfall in", str_to_title(a)), #Can not use a specific subtitle describing trend because the city varies
+        x = "log Rainfall", 
+        y = "Frequency",
+        caption = "Yawen Zhou"
+      ) +
+     theme(
+       plot.title = element_text(size = 22, hjust = 0.5),
+       plot.subtitle = element_text(size = 18, hjust = 0.5),
+       plot.caption = element_text(size = 14),
+       axis.title.x = element_text(size = 18),
+       axis.title.y = element_text(size = 18),
+       axis.text.x = element_text(size = 15),
+       axis.text.y = element_text(size = 15),
+       panel.background = element_rect(fill = "#F6F5F5")
+  ) 
+    return(rainfall_histogram) 
+  }
+}
+
+visualize_rainfall("PERTH", 2000)
+
+df %>%
+    dplyr::filter(city_name == "PERTH", year == 2000) %>%
+    ggplot(aes(log(rainfall))) +
+    geom_histogram()   #To check if my function got the same plot
+
+```
+
+Part 4: Apply functions and plot
+```{r}
+## Part 4A
+rain_df <- df_2014onwards %>%
+  group_by(city_name, year) %>% #For a given city and for a given year
+  summarize(
+    mean = sample_mean(rainfall),
+    sd = sample_sd(rainfall),
+    lower_bound = calculate_CI(rainfall, conf = 0.95)[1],
+    upper_bound = calculate_CI(rainfall, conf = 0.95)[2],
+    .groups = "drop"
+  )
+print(rain_df)
+
+## Part 4B
+rain_df %>%
+  ggplot(aes(
+    x = year,
+    y = mean   
+  )) +
+  geom_point(size = 2, color = "steelblue") +
+  geom_line(linetype = "dashed", size = 0.5) +
+  facet_wrap(~ city_name, scales = "free_y", ncol = 2) +  #facet by city_name
+  geom_errorbar(aes(ymin = lower_bound, ymax = upper_bound), width = 0.2, color = "#606060") +  #draw error bar
+  labs(
+    title = "Mean Rainfall Over Time",
+    subtitle = "Trends of rainfall vary among cities",
+    x = "Year", 
+    y = "Mean Rainfall",
+    caption = "Yawen Zhou"
+  ) +
+  theme(
+    plot.title = element_text(size = 16, hjust = 0.5),
+    plot.subtitle = element_text(size = 14, hjust = 0.5),
+    plot.caption = element_text(size = 11),
+    axis.title.x = element_text(size = 13),
+    axis.title.y = element_text(size = 13),
+    panel.background = element_rect(fill = "white"),
+    panel.grid = element_line(color = "#F2F2F2"),
+    strip.background = element_rect(fill = "#E7F5FA", color = "white"),
+    strip.text = element_text(face = "bold")
+  )
+
+```
